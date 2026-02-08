@@ -79,11 +79,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const signUp = async (name: string, email: string, password: string) => {
     try {
       const response = await authApi.register({ name, email, password });
-      setUser(response.user);
-      setToken(response.token);
-      await AsyncStorage.setItem("token", response.token);
-      await AsyncStorage.setItem("user", JSON.stringify(response.user));
-      return { emailVerified: response.user.emailVerified };
+      // We don't set user/token immediately to force verification flow
+      // Or we can set it but handle navigation elsewhere
+      // Let's return the user data so the screen can navigate
+      return { emailVerified: response.user.emailVerified, user: response.user };
     } catch (error) {
       console.error("Sign up failed:", error);
       throw error;
@@ -105,8 +104,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const verifyEmail = async (email: string, otp: string) => {
     try {
       await authApi.verifyEmail({ email, otp });
-      // Reload user to get updated emailVerified status
-      await loadUser();
+      // Don't loadUser() here as we might not have a token yet
     } catch (error) {
       console.error("Email verification failed:", error);
       throw error;

@@ -59,7 +59,7 @@ export default function JournalScreen() {
   const viewEntry = async (date: string) => {
     try {
       // Backend returns { success: true, data: dailyLogObj }
-      setSelectedEntry(data.dataournal(date);
+      const data = await aiApi.getJournal(date);
       setSelectedEntry(data.journal);
     } catch (e) { Alert.alert("Error", "Failed to load entry"); }
   };

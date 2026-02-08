@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList,
-  Alert, ActivityIndicator, RefreshControl, Dimensions,
+  Alert, ActivityIndicator, RefreshControl, Dimensions, Modal, TextInput,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,7 +26,8 @@ const dayMap: Record<string, string> = {
 interface Template {
   id: string;
   name: string;
-  time: string;
+  startTime: string;
+  endTime: string;
   category?: string;
   daysOfWeek: number[];
 }
@@ -35,6 +36,15 @@ export default function ScheduleScreen({ navigation }: any) {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    startTime: "",
+    endTime: "",
+    category: "",
+    daysOfWeek: [] as number[],
+  });
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -60,13 +70,75 @@ export default function ScheduleScreen({ navigation }: any) {
     ]);
   };
 
+  const handleEdit = (template: Template) => {
+    setEditingTemplate(template);
+    setFormData({
+      name: template.name,
+      startTime: template.startTime,
+      endTime: template.endTime,
+      category: template.category || "",
+      daysOfWeek: template.daysOfWeek,
+    });
+    setShowModal(true);
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!formData.name || !formData.startTime || !formData.endTime) {
+      Alert.alert("Error", "Please fill in all required fields");
+      return;
+    }
+
+    try {
+      if (editingTemplate) {
+        const result = await scheduleApi.updateTemplate(editingTemplate.id, formData);
+        setTemplates(prev => prev.map(t => t.id === editingTemplate.id ? result.template : t));
+      }
+      setShowModal(false);
+      setEditingTemplate(null);
+      setFormData({ name: "", startTime: "", endTime: "", category: "", daysOfWeek: [] });
+    } catch (e) {
+      Alert.alert("Error", "Failed to save template");
+    }
+  };
+
+  const handleDeleteAll = () => {
+    Alert.alert(
+      "Delete All Templates",
+      `This will permanently remove all ${templates.length} templates. Continue?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await scheduleApi.deleteAllTemplates();
+              setTemplates([]);
+            } catch (e) {
+              Alert.alert("Error", "Failed to delete templates");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const toggleDay = (dayIndex: number) => {
+    setFormData(prev => ({
+      ...prev,
+      daysOfWeek: prev.daysOfWeek.includes(dayIndex)
+        ? prev.daysOfWeek.filter(d => d !== dayIndex)
+        : [...prev.daysOfWeek, dayIndex],
+    }));
+  };
+
   const formatTime = (time: string) => {
     const [h, m] = time.split(":");
     const hour = parseInt(h, 10);
     return `${hour % 12 || 12}:${m} ${hour >= 12 ? "PM" : "AM"}`;
   };
 
-  const sorted = [...templates].sort((a, b) => a.time.localeCompare(b.time));
+  const sorted = [...templates].sort((a, b) => a.startTime.localeCompare(b.startTime));
   const categories = [...new Set(templates.map(t => t.category).filter(Boolean))];
 
   if (loading) return <SafeAreaView style={styles.container}><View style={styles.center}><ActivityIndicator size="large" color="#0ea5e9" /></View></SafeAreaView>;
@@ -116,7 +188,14 @@ export default function ScheduleScreen({ navigation }: any) {
 
         {/* Templates */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Templates ({templates.length})</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Templates ({templates.length})</Text>
+            {templates.length > 0 && (
+              <TouchableOpacity onPress={handleDeleteAll} style={styles.deleteAllBtn}>
+                <Text style={styles.deleteAllText}>🗑️ Delete All</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {sorted.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -133,13 +212,18 @@ export default function ScheduleScreen({ navigation }: any) {
                     <View style={[styles.catBadge, { backgroundColor: cc.bg }]}>
                       <Text style={[styles.catText, { color: cc.text }]}>{t.category || "General"}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleDelete(t.id, t.name)}>
-                      <Text style={styles.deleteBtn}>✕</Text>
-                    </TouchableOpacity>
+                    <View style={styles.actionBtns}>
+                      <TouchableOpacity onPress={() => handleEdit(t)} style={styles.iconBtn}>
+                        <Text style={styles.editBtn}>✏️</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDelete(t.id, t.name)} style={styles.iconBtn}>
+                        <Text style={styles.deleteBtn}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   <Text style={styles.templateName}>{t.name}</Text>
-                  <Text style={styles.templateTime}>🕐 {formatTime(t.time)}</Text>
+                  <Text style={styles.templateTime}>🕐 {formatTime(t.startTime)} - {formatTime(t.endTime)}</Text>
 
                   {/* Day chips */}
                   <View style={styles.daysRow}>
@@ -160,6 +244,78 @@ export default function ScheduleScreen({ navigation }: any) {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Edit Modal */}
+      <Modal visible={showModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Template</Text>
+              <TouchableOpacity onPress={() => {
+                setShowModal(false);
+                setEditingTemplate(null);
+                setFormData({ name: "", startTime: "", endTime: "", category: "", daysOfWeek: [] });
+              }}>
+                <Text style={styles.modalClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.label}>Task Name</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.name}
+                onChangeText={text => setFormData(prev => ({ ...prev, name: text }))}
+                placeholder="Enter task name"
+              />
+
+              <Text style={styles.label}>Category</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.category}
+                onChangeText={text => setFormData(prev => ({ ...prev, category: text }))}
+                placeholder="e.g., Prayer, Workout, Study"
+              />
+
+              <Text style={styles.label}>Start Time (HH:MM)</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.startTime}
+                onChangeText={text => setFormData(prev => ({ ...prev, startTime: text }))}
+                placeholder="09:00"
+              />
+
+              <Text style={styles.label}>End Time (HH:MM)</Text>
+              <TextInput
+                style={styles.input}
+                value={formData.endTime}
+                onChangeText={text => setFormData(prev => ({ ...prev, endTime: text }))}
+                placeholder="10:00"
+              />
+
+              <Text style={styles.label}>Days of Week</Text>
+              <View style={styles.daysSelector}>
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day, idx) => {
+                  const active = formData.daysOfWeek.includes(idx);
+                  return (
+                    <TouchableOpacity
+                      key={day}
+                      onPress={() => toggleDay(idx)}
+                      style={[styles.daySelectorChip, active && styles.daySelectorChipActive]}
+                    >
+                      <Text style={[styles.daySelectorText, active && styles.daySelectorTextActive]}>{day}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <TouchableOpacity onPress={handleSaveTemplate} style={styles.saveBtn}>
+                <Text style={styles.saveBtnText}>Update Template</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -198,4 +354,25 @@ const styles = StyleSheet.create({
   daysRow: { flexDirection: "row", gap: 4, flexWrap: "wrap" },
   dayChip: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1.5, borderColor: "#e2e8f0", backgroundColor: "#f8fafc" },
   dayText: { fontSize: 11, fontWeight: "500", color: "#94a3b8" },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  deleteAllBtn: { backgroundColor: "#fee2e2", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  deleteAllText: { fontSize: 12, fontWeight: "700", color: "#dc2626" },
+  actionBtns: { flexDirection: "row", gap: 8 },
+  iconBtn: { padding: 4 },
+  editBtn: { fontSize: 16 },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: "85%" },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" },
+  modalTitle: { fontSize: 20, fontWeight: "800", color: "#0f172a" },
+  modalClose: { fontSize: 24, color: "#94a3b8" },
+  modalBody: { paddingHorizontal: 24, paddingVertical: 16 },
+  label: { fontSize: 14, fontWeight: "700", color: "#0f172a", marginBottom: 8, marginTop: 12 },
+  input: { backgroundColor: "#f8fafc", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, borderWidth: 1, borderColor: "#e2e8f0" },
+  daysSelector: { flexDirection: "row", gap: 8, flexWrap: "wrap", marginTop: 8 },
+  daySelectorChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: "#e2e8f0", backgroundColor: "#f8fafc" },
+  daySelectorChipActive: { backgroundColor: "#dbeafe", borderColor: "#3b82f6" },
+  daySelectorText: { fontSize: 13, fontWeight: "600", color: "#94a3b8" },
+  daySelectorTextActive: { color: "#3b82f6" },
+  saveBtn: { backgroundColor: "#0ea5e9", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 24, marginBottom: 16 },
+  saveBtnText: { fontSize: 16, fontWeight: "700", color: "#fff" },
 });

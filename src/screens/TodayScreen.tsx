@@ -53,7 +53,7 @@ function TaskCard({ task, onComplete, onCamera, isUpdating }: TaskCardProps) {
       {/* Content */}
       <View style={styles.taskBody}>
         <View style={styles.taskTop}>
-          <Text style={[styles.taskTime, { color }]}>{formatTime(task.time)}</Text>
+          <Text style={[styles.taskTime, { color }]}>{formatTime(task.startTime)} - {formatTime(task.endTime)}</Text>
           {task.category && (
             <View style={[styles.catBadge, { backgroundColor: color + "15" }]}>
               <Text style={[styles.catText, { color }]}>{task.category}</Text>

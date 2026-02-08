@@ -28,7 +28,9 @@ export default function VerifyEmailScreen({ route, navigation }: any) {
     setLoading(true);
     try {
       await verifyEmail(email, otp);
-      Alert.alert("Success", "Email verified successfully!");
+      Alert.alert("Success", "Email verified successfully! Please log in.", [
+        { text: "OK", onPress: () => navigation.replace("Login", { email }) }
+      ]);
     } catch (error: any) {
       Alert.alert("Verification Failed", error.response?.data?.error || "Invalid OTP");
     } finally {

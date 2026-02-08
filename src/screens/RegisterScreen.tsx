@@ -34,9 +34,8 @@ export default function RegisterScreen({ navigation }: any) {
     setLoading(true);
     try {
       const result = await signUp(name, email, password);
-      if (!result.emailVerified) {
-        navigation.navigate("VerifyEmail", { email });
-      }
+      // Always navigate to verification screen
+      navigation.navigate("VerifyEmail", { email });
     } catch (error: any) {
       Alert.alert("Registration Failed", error.response?.data?.error || "Please try again");
     } finally {

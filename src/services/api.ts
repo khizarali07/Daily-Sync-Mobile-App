@@ -88,7 +88,8 @@ export interface Task {
   templateId?: string;
   date: string;
   name: string;
-  time: string;
+  startTime: string;
+  endTime: string;
   category?: string;
   isCompleted: boolean;
   completedAt?: string;
@@ -127,7 +128,7 @@ export const tasksApi = {
     return response.data;
   },
 
-  create: async (data: { name: string; date: string; time: string; category?: string }) => {
+  create: async (data: { name: string; date: string; startTime: string; endTime: string; category?: string }) => {
     const response = await api.post<{ message: string; task: Task }>("/tasks", data);
     return response.data;
   },
@@ -214,7 +215,8 @@ export const aiApi = {
 export interface ScheduleTemplate {
   id: string;
   name: string;
-  time: string;
+  startTime: string;
+  endTime: string;
   category?: string;
   description?: string;
   isRecurring: boolean;
@@ -234,6 +236,16 @@ export const scheduleApi = {
 
   deleteTemplate: async (id: string) => {
     const response = await api.delete<{ message: string }>(`/schedule/templates/${id}`);
+    return response.data;
+  },
+
+  updateTemplate: async (id: string, data: Partial<ScheduleTemplate>) => {
+    const response = await api.put<{ template: ScheduleTemplate }>(`/schedule/templates/${id}`, data);
+    return response.data;
+  },
+
+  deleteAllTemplates: async () => {
+    const response = await api.delete<{ message: string; count: number }>("/schedule/templates");
     return response.data;
   },
 };

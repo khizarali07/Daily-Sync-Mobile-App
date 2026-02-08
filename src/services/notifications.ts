@@ -16,7 +16,7 @@ Notifications.setNotificationHandler({
 
 export interface NotificationService {
   registerForPushNotifications: () => Promise<string | null>;
-  scheduleTaskNotification: (task: Task) => Promise<string | null>;
+  scheduleTaskNotification: (task: Task) => Promise<string[] | null>;
   scheduleMultipleTaskNotifications: (tasks: Task[]) => Promise<void>;
   cancelAllNotifications: () => Promise<void>;
   cancelNotification: (id: string) => Promise<void>;
@@ -68,44 +68,55 @@ class NotificationServiceImpl implements NotificationService {
     }
   }
 
-  async scheduleTaskNotification(task: Task): Promise<string | null> {
+  async scheduleTaskNotification(task: Task): Promise<string[] | null> {
     try {
-      // Parse task time (format: "HH:MM")
-      const [hours, minutes] = task.time.split(":").map(Number);
+      const [hours, minutes] = task.startTime.split(":").map(Number);
       
-      // Get today's date and set the task time
       const now = new Date();
       const taskDate = new Date(task.date);
       taskDate.setHours(hours, minutes, 0, 0);
 
-      // Only schedule if the task is in the future
-      if (taskDate <= now) {
-        return null;
+      // Define notification triggers
+      const triggers = [
+        { offset: -10, title: `⏰ Upcoming: ${task.name}`, body: `Starts in 10 minutes!` },
+        { offset: -1, title: `⚠️ Starting Soon: ${task.name}`, body: `Starts in 1 minute!` },
+        { offset: 5, title: `🔔 Task Check-in: ${task.name}`, body: `Started 5 minutes ago. Are you on it?` }
+      ];
+
+      const ids: string[] = [];
+
+      for (const t of triggers) {
+        const triggerDate = new Date(taskDate.getTime() + t.offset * 60000);
+        
+        // Only schedule if the trigger time is in the future
+        if (triggerDate > now) {
+          const secondsUntil = Math.floor((triggerDate.getTime() - now.getTime()) / 1000);
+          
+          if (secondsUntil > 0) {
+           const id = await Notifications.scheduleNotificationAsync({
+              content: {
+                title: t.title,
+                body: t.body,
+                data: { taskId: task.id },
+                sound: "default",
+              },
+              trigger: {
+                type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+                seconds: secondsUntil,
+                repeats: false,
+              },
+            });
+            ids.push(id);
+          }
+        }
       }
 
-      // Calculate seconds until the notification
-      const secondsUntil = Math.floor((taskDate.getTime() - now.getTime()) / 1000);
-
-      if (secondsUntil <= 0) {
-        return null;
+      if (ids.length > 0) {
+         console.log(`Scheduled ${ids.length} notifications for ${task.name} at ${task.startTime}`);
+         return ids;
       }
+      return null;
 
-      const id = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `⏰ ${task.name}`,
-          body: task.category ? `Time for ${task.category}` : "It's time for your task!",
-          data: { taskId: task.id },
-          sound: "default",
-        },
-        trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-          seconds: secondsUntil,
-          repeats: false,
-        },
-      });
-
-      console.log(`Scheduled notification for ${task.name} at ${task.time}`);
-      return id;
     } catch (error) {
       console.error("Error scheduling notification:", error);
       return null;
