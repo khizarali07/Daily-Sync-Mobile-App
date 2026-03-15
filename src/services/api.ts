@@ -137,6 +137,11 @@ export const tasksApi = {
     const response = await api.delete<{ message: string }>(`/tasks/${id}`);
     return response.data;
   },
+
+  deleteByDate: async (date: string) => {
+    const response = await api.delete<{ message: string; count: number; date: string }>(`/tasks/date/${date}`);
+    return response.data;
+  },
 };
 
 // AI Analysis types

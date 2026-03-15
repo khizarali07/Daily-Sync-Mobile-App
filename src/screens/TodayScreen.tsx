@@ -182,6 +182,30 @@ export default function TodayScreen() {
     finally { setAnalyzing(false); }
   };
 
+  const handleDeleteAllTodayTasks = () => {
+    if (tasks.length === 0 || !date) return;
+
+    Alert.alert(
+      "Delete All Today Tasks",
+      `Delete all ${tasks.length} tasks for today?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await tasksApi.deleteByDate(date);
+              setTasks([]);
+            } catch (e: any) {
+              Alert.alert("Error", e.response?.data?.error || "Failed to delete today's tasks");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const completed = tasks.filter(t => t.isCompleted).length;
   const progress = tasks.length > 0 ? (completed / tasks.length) * 100 : 0;
 
@@ -215,6 +239,11 @@ export default function TodayScreen() {
         <View style={styles.progressBarBg}>
           <LinearGradient colors={["#0ea5e9", "#7c3aed"]} style={[styles.progressBarFill, { width: `${progress}%` }]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
         </View>
+        {tasks.length > 0 && (
+          <TouchableOpacity style={styles.deleteAllBtn} onPress={handleDeleteAllTodayTasks}>
+            <Text style={styles.deleteAllText}>Delete All Today Tasks</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* AI overlay */}
@@ -263,6 +292,8 @@ const styles = StyleSheet.create({
   progressPct: { fontSize: 14, fontWeight: "800", color: "#0ea5e9" },
   progressBarBg: { height: 8, backgroundColor: "#f1f5f9", borderRadius: 4, overflow: "hidden" },
   progressBarFill: { height: "100%", borderRadius: 4 },
+  deleteAllBtn: { marginTop: 12, alignSelf: "flex-start", backgroundColor: "#fee2e2", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  deleteAllText: { fontSize: 12, fontWeight: "700", color: "#dc2626" },
   list: { padding: 20, paddingBottom: 32 },
   taskCard: { flexDirection: "row", marginBottom: 16 },
   taskCardDone: { opacity: 0.7 },
